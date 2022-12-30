@@ -287,7 +287,7 @@ func (e *Election) runCandidate() {
 	time.Sleep(time.Duration(rand.Intn(500)+300) * time.Millisecond)
 
 	var (
-		total   = len(e.memberlist)
+		total   = 0
 		want    = 0
 		timeout = time.Second
 	)
@@ -321,7 +321,6 @@ func (e *Election) runCandidate() {
 		case <-e.pingCh:
 			continue
 
-		// 새롭게 참여하는 노드가 리더의 존재 유무를 몰라 voteMeMsg를 전송하면 리더는 pong을 보낸다.
 		case pong := <-e.pongCh:
 			e.state.setTerm(pong.Term)
 			e.leaderAddr = pong.sender
@@ -392,9 +391,6 @@ func (e *Election) runCandidate() {
 func (e *Election) broadcast(msg Msg) {
 	for member := range e.memberlist {
 		addr, _ := net.ResolveUDPAddr("udp", member)
-
-		// 중간에 특정 노드가 작동하지 않을 경우, 그 뒤의 노드들에 대한 통신은
-		// 멈추기 때문에 고루틴으로 호출한다.
 		go sendMsg(e.conn, addr, msg)
 	}
 }
