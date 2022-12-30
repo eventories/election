@@ -301,7 +301,6 @@ func (e *Election) runCandidate() {
 			if e.state.voted(e.state.term()) {
 				continue
 			}
-			e.state.setTerm(e.state.term() + 1)
 
 			e.broadcast(&voteMeMsg{e.state.term(), nil})
 
