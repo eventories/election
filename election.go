@@ -24,7 +24,7 @@ type Election struct {
 	pongCh         chan *pongMsg
 	voteCh         chan *voteMsg
 	voteMeCh       chan *voteMeMsg
-	newTermCh      chan uint64
+	newTermCh      chan *newTermMsg
 	notifyLeaderCh chan *notifyLeaderMsg
 	stopCh         chan struct{}
 
@@ -68,7 +68,7 @@ func New(cfg *Config) (*Election, error) {
 		voteCh:         make(chan *voteMsg, 1),
 		voteMeCh:       make(chan *voteMeMsg, 1),
 		notifyLeaderCh: make(chan *notifyLeaderMsg, 1),
-		newTermCh:      make(chan uint64, 1),
+		newTermCh:      make(chan *newTermMsg, 1),
 		addMember:      make(chan *addMemberMsg, 1),
 		delMember:      make(chan *delMemberMsg, 1),
 		stopCh:         make(chan struct{}, 1),
@@ -123,11 +123,6 @@ func (e *Election) readLoop() {
 			continue
 		}
 
-		if _, ok := e.memberlist[sender.String()]; !ok {
-			e.logger.Printf("%s is not member", sender.String())
-			continue
-		}
-
 		msg, err := decodePacket(b[:n])
 		if err != nil {
 			e.logger.Printf("decodePacket failure: %v\n", err)
@@ -141,6 +136,11 @@ func (e *Election) readLoop() {
 }
 
 func (e *Election) handle(msg Msg) {
+	if _, ok := e.memberlist[msg.Sender().String()]; !ok {
+		e.logger.Printf("%s is not member", msg.Sender().String())
+		return
+	}
+
 	switch msg.Kind() {
 	case pingType:
 		e.pingCh <- msg.(*pingMsg)
@@ -155,7 +155,7 @@ func (e *Election) handle(msg Msg) {
 		e.voteMeCh <- msg.(*voteMeMsg)
 
 	case newTermType:
-		e.newTermCh <- msg.(*newTermMsg).Term
+		e.newTermCh <- msg.(*newTermMsg)
 
 	case notifyLeaderType:
 		e.notifyLeaderCh <- msg.(*notifyLeaderMsg)
@@ -264,7 +264,7 @@ func (e *Election) runFollower() {
 			continue
 
 		case term := <-e.newTermCh:
-			if e.state.term() >= term {
+			if e.state.term() >= term.Term {
 				continue
 			}
 
