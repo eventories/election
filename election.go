@@ -249,10 +249,21 @@ func (e *Election) runLeader() {
 func (e *Election) runFollower() {
 	e.state.setRole(Follower)
 
-	interval := time.NewTicker(time.Second)
-	defer interval.Stop()
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
 	for {
 		select {
+		case <-ticker.C:
+			if err := e.ping(e.leaderAddr, 300*time.Millisecond); err == nil {
+				continue
+			}
+
+			e.broadcast(&newTermMsg{e.state.term(), nil})
+
+			go e.runCandidate()
+
+			return
+
 		case ping := <-e.pingCh:
 			sendMsg(e.conn, ping.sender, &pongMsg{e.state.term(), e.leaderAddr.String(), nil})
 
@@ -296,17 +307,6 @@ func (e *Election) runFollower() {
 				continue
 			}
 			sendMsg(e.conn, e.leaderAddr, &delMemberMsg{e.state.term(), member.Member, nil})
-
-		case <-interval.C:
-			if err := e.ping(e.leaderAddr, 300*time.Millisecond); err == nil {
-				continue
-			}
-
-			e.broadcast(&newTermMsg{e.state.term(), nil})
-
-			go e.runCandidate()
-
-			return
 
 		case <-e.stopCh:
 			return
