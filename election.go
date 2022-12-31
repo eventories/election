@@ -344,6 +344,7 @@ func (e *Election) runCandidate() {
 
 			// Reset
 			total = len(e.memberlist)
+			want = 0
 
 			// Broadcast votingMeMsg means voting for self.
 			e.voteCh <- &voteMsg{e.state.term(), e.localaddr}
