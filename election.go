@@ -123,6 +123,11 @@ func (e *Election) readLoop() {
 			continue
 		}
 
+		if _, ok := e.memberlist[sender.String()]; !ok {
+			e.logger.Printf("%s is not member", sender.String())
+			continue
+		}
+
 		msg, err := decodePacket(b[:n])
 		if err != nil {
 			e.logger.Printf("decodePacket failure: %v\n", err)
@@ -169,9 +174,38 @@ func (e *Election) handle(msg Msg) {
 func (e *Election) runLeader() {
 	e.state.setRole(Leader)
 
+	var (
+		total    = len(e.memberlist)
+		want     = make(map[string]struct{}, len(e.memberlist))
+		interval = 5 * time.Second
+	)
+
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+
 	for {
 		select {
+		case <-timer.C:
+			// If more than half of the ping requests are not received for
+			// a set period of time, the leader is in an isolated state.
+			// Change the role to candidate.
+			if len(want) < total/2+1 {
+				e.leaderAddr = nil
+				go e.runCandidate()
+				return
+			}
+			total = len(e.memberlist)
+
+			want = make(map[string]struct{}, total)
+			want[e.localaddr.String()] = struct{}{}
+
+			timer.Reset(interval)
+
 		case ping := <-e.pingCh:
+			if _, ok := want[ping.sender.String()]; !ok {
+				want[ping.sender.String()] = struct{}{}
+			}
+
 			sendMsg(e.conn, ping.sender, &pongMsg{e.state.term(), e.leaderAddr.String(), nil})
 
 		case <-e.pongCh:
@@ -213,7 +247,7 @@ func (e *Election) runLeader() {
 func (e *Election) runFollower() {
 	e.state.setRole(Follower)
 
-	interval := time.NewTicker(3 * time.Second)
+	interval := time.NewTicker(time.Second)
 	defer interval.Stop()
 	for {
 		select {
@@ -234,7 +268,7 @@ func (e *Election) runFollower() {
 				continue
 			}
 
-			if err := e.ping(e.leaderAddr, 100*time.Millisecond); err == nil {
+			if err := e.ping(e.leaderAddr, 300*time.Millisecond); err == nil {
 				continue
 			}
 
@@ -299,6 +333,8 @@ func (e *Election) runCandidate() {
 		select {
 		case <-electionTimeout.C:
 			if e.state.voted(e.state.term()) {
+				e.state.setTerm(e.state.term() + 1)
+				electionTimeout.Reset(timeout)
 				continue
 			}
 
@@ -308,13 +344,15 @@ func (e *Election) runCandidate() {
 			total = len(e.memberlist)
 
 			// Broadcast votingMeMsg means voting for self.
+			e.state.voting(e.state.term())
 			want = 1
 
-			// Accept Solo mode.
-			if total == 0 {
-				go e.runLeader()
-				return
-			}
+			// TODO (dbadoy): Add Solo mode.
+			//
+			// if total == 0 {
+			// 	go e.runLeader()
+			// 	return
+			// }
 
 			electionTimeout.Reset(timeout)
 
@@ -347,15 +385,13 @@ func (e *Election) runCandidate() {
 			return
 
 		case voteMe := <-e.voteMeCh:
-			if e.state.term() > voteMe.Term {
-				continue
-			}
 			if e.state.term() < voteMe.Term {
 				e.state.setTerm(voteMe.Term)
 			}
 
 			// Already voted.
 			if e.state.voted(e.state.term()) {
+				e.state.setTerm(e.state.term() + 1)
 				continue
 			}
 
