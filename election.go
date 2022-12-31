@@ -180,6 +180,8 @@ func (e *Election) runLeader() {
 		interval = 5 * time.Second
 	)
 
+	want[e.localaddr.String()] = struct{}{}
+
 	timer := time.NewTimer(interval)
 	defer timer.Stop()
 
@@ -340,19 +342,11 @@ func (e *Election) runCandidate() {
 
 			e.broadcast(&voteMeMsg{e.state.term(), nil})
 
-			// reset
+			// Reset
 			total = len(e.memberlist)
 
 			// Broadcast votingMeMsg means voting for self.
-			e.state.voting(e.state.term())
-			want = 1
-
-			// TODO (dbadoy): Add Solo mode.
-			//
-			// if total == 0 {
-			// 	go e.runLeader()
-			// 	return
-			// }
+			e.voteCh <- &voteMsg{e.state.term(), e.localaddr}
 
 			electionTimeout.Reset(timeout)
 
