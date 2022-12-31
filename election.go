@@ -33,7 +33,7 @@ type Election struct {
 	delMember chan *delMemberMsg
 }
 
-func NewElection(cfg *Config) (*Election, error) {
+func New(cfg *Config) (*Election, error) {
 	if cfg == nil {
 		cfg = DefaultConfig()
 	}
