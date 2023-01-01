@@ -175,11 +175,14 @@ func (e *Election) runLeader() {
 	e.state.setRole(Leader)
 
 	var (
+		// Check if a majority of their Followers have been pinged each interval
+		// to determine if is Leader isolated.
 		total    = len(e.memberlist)
 		want     = make(map[string]struct{}, len(e.memberlist))
 		interval = 5 * time.Second
 	)
 
+	// The majority includes the leader himself.
 	want[e.localaddr.String()] = struct{}{}
 
 	timer := time.NewTimer(interval)
@@ -217,6 +220,7 @@ func (e *Election) runLeader() {
 			continue
 
 		case voteMe := <-e.voteMeCh:
+			// Advertise the Leader to newly joined nodes.
 			sendMsg(e.conn, voteMe.sender, &pongMsg{e.state.term(), e.leaderAddr.String(), nil})
 
 		case <-e.newTermCh:
@@ -251,6 +255,7 @@ func (e *Election) runFollower() {
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -258,6 +263,8 @@ func (e *Election) runFollower() {
 				continue
 			}
 
+			// Broadcast newTermMsg to elect a new Leader if leader is
+			// not working.
 			e.broadcast(&newTermMsg{e.state.term(), nil})
 
 			go e.runCandidate()
@@ -281,6 +288,7 @@ func (e *Election) runFollower() {
 				continue
 			}
 
+			// Makes sure the Leader isn't working.
 			if err := e.ping(e.leaderAddr, 300*time.Millisecond); err == nil {
 				continue
 			}
@@ -296,6 +304,7 @@ func (e *Election) runFollower() {
 
 			sendMsg(e.conn, e.leaderAddr, &addMemberMsg{e.state.term(), e.conn.LocalAddr().String(), nil})
 
+		// Relay to the leader after verifying the message.
 		case member := <-e.addMember:
 			if e.state.term() != member.Term {
 				continue
