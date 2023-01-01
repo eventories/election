@@ -29,6 +29,11 @@ func (r Role) String() string {
 	}
 }
 
+type Stat struct {
+	Term uint64
+	Role Role
+}
+
 type state struct {
 	currentTerm uint64
 	currentRole Role
@@ -43,6 +48,12 @@ func newState() *state {
 		currentRole: Shutdown,
 		vote:        make(map[uint64]struct{}),
 	}
+}
+
+func (s *state) stat() Stat {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return Stat{s.currentTerm, s.currentRole}
 }
 
 func (s *state) voted(term uint64) bool {
