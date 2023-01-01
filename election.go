@@ -94,8 +94,8 @@ func (e *Election) Run() (err error) {
 		return err
 	}
 
-	go e.readLoop()
 	go e.runCandidate() // Start Candidate first.
+	go e.readLoop()
 
 	e.logger.Printf("%s loop started\n", e.localaddr)
 	return nil
@@ -271,8 +271,8 @@ func (e *Election) runFollower() {
 
 			return
 
-		case ping := <-e.pingCh:
-			sendMsg(e.conn, ping.sender, &pongMsg{e.state.term(), e.leaderAddr.String(), nil})
+		case <-e.pingCh:
+			continue
 
 		case <-e.pongCh:
 			continue
