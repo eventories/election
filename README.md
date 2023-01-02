@@ -14,7 +14,28 @@ Leader nodes send pong replies to pings sent by Follower nodes, and count the nu
 
 Regardless of the role, when all nodes receive NotifyLeaderMsg, they change their leader with the corresponding message and then perform Follower node operations.
 
+## Message
+All messages are less than 128 bytes in size. When sending a message to another node, the first 1 byte is the message type, and the remaining 127 bytes are filled with the actual payload. The sender/receiver must handle this properly.
+
+```
+0 1 2 3 4 5 6 7 8 9 . . . . . . . . . . . . . . . . . . . . . . 128
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+| Type of message = 0 | Payload                                 |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
 
 
+### PingMsg
+```go
+PingMsg {}
+```
+Blah
 
-
+### PongMsg
+```go
+PongMsg {
+    Term   uint64
+    Leader string
+}
+```
+Blah
