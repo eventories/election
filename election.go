@@ -177,7 +177,7 @@ func (e *Election) runLeader() {
 	var (
 		// Check if a majority of their Followers have been pinged each interval
 		// to determine if is Leader isolated.
-		total    = len(e.memberlist)
+		total    = len(e.memberlist) + 1 // Include selfs in cluster.
 		want     = make(map[string]struct{}, len(e.memberlist))
 		interval = 5 * time.Second
 	)
@@ -199,7 +199,7 @@ func (e *Election) runLeader() {
 				go e.runCandidate()
 				return
 			}
-			total = len(e.memberlist)
+			total = len(e.memberlist) + 1
 
 			want = make(map[string]struct{}, total)
 			want[e.localaddr.String()] = struct{}{}
@@ -356,7 +356,7 @@ func (e *Election) runCandidate() {
 			e.broadcast(&voteMeMsg{e.state.term(), nil})
 
 			// Reset
-			total = len(e.memberlist)
+			total = len(e.memberlist) + 1
 			want = 0
 
 			// Broadcast votingMeMsg means voting for self.
