@@ -30,9 +30,8 @@ type Msg interface {
 }
 
 type (
-	// pingMsg does not contain any data and is a request to receive
-	// pongMsg.
 	pingMsg struct {
+		Term   uint64
 		sender *net.UDPAddr
 	}
 
@@ -106,6 +105,9 @@ func decodePacket(b []byte) (Msg, error) {
 	switch kind {
 	case pingType:
 		var p pingMsg
+		if err := json.Unmarshal(payload, &p); err != nil {
+			return nil, err
+		}
 		msg = &p
 
 	case pongType:

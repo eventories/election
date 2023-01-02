@@ -207,6 +207,10 @@ func (e *Election) runLeader() {
 			timer.Reset(interval)
 
 		case ping := <-e.pingCh:
+			if e.state.term() != ping.Term {
+				continue
+			}
+
 			if _, ok := want[ping.sender.String()]; !ok {
 				want[ping.sender.String()] = struct{}{}
 			}
@@ -389,6 +393,10 @@ func (e *Election) runCandidate() {
 			return
 
 		case voteMe := <-e.voteMeCh:
+			if e.state.term() > voteMe.Term {
+				continue
+			}
+
 			if e.state.term() < voteMe.Term {
 				e.state.setTerm(voteMe.Term)
 			}
@@ -436,7 +444,7 @@ func (e *Election) broadcast(msg Msg) {
 }
 
 func (e *Election) ping(to *net.UDPAddr, timeout time.Duration) error {
-	if _, err := sendMsg(e.conn, to, &pingMsg{}); err != nil {
+	if _, err := sendMsg(e.conn, to, &pingMsg{e.state.term(), nil}); err != nil {
 		return err
 	}
 
