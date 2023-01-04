@@ -13,10 +13,6 @@ const (
 	voteType
 	voteMeType
 	notifyLeaderType
-
-	// Sub
-	addMemberType
-	delMemberType
 )
 
 type Msg interface {
@@ -76,25 +72,6 @@ type (
 	}
 )
 
-// Sub message types
-//
-// There are the message types handled by the Leader node. If the
-// node receiving the request is a Follower node, it relays to the
-// Leader node.
-type (
-	addMemberMsg struct {
-		Term   uint64
-		Member string
-		sender *net.UDPAddr
-	}
-
-	delMemberMsg struct {
-		Term   uint64
-		Member string
-		sender *net.UDPAddr
-	}
-)
-
 func decodePacket(b []byte) (Msg, error) {
 	var (
 		kind    = b[0]
@@ -144,20 +121,6 @@ func decodePacket(b []byte) (Msg, error) {
 			return nil, err
 		}
 		msg = &p
-
-	case addMemberType:
-		var p addMemberMsg
-		if err := json.Unmarshal(payload, &p); err != nil {
-			return nil, err
-		}
-		msg = &p
-
-	case delMemberType:
-		var p delMemberMsg
-		if err := json.Unmarshal(payload, &p); err != nil {
-			return nil, err
-		}
-		msg = &p
 	}
 
 	return msg, nil
@@ -201,11 +164,3 @@ func (*voteMsg) Kind() byte                    { return voteType }
 func (n *notifyLeaderMsg) Sender() *net.UDPAddr        { return n.sender }
 func (n *notifyLeaderMsg) SetSender(addr *net.UDPAddr) { n.sender = addr }
 func (*notifyLeaderMsg) Kind() byte                    { return notifyLeaderType }
-
-func (a *addMemberMsg) Sender() *net.UDPAddr        { return a.sender }
-func (a *addMemberMsg) SetSender(addr *net.UDPAddr) { a.sender = addr }
-func (*addMemberMsg) Kind() byte                    { return addMemberType }
-
-func (d *delMemberMsg) Sender() *net.UDPAddr        { return d.sender }
-func (d *delMemberMsg) SetSender(addr *net.UDPAddr) { d.sender = addr }
-func (*delMemberMsg) Kind() byte                    { return delMemberType }

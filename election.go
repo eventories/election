@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -14,8 +15,10 @@ type Election struct {
 	localaddr *net.UDPAddr
 	logger    *log.Logger
 
+	mu         sync.Mutex
 	memberlist map[string]struct{} // Cluster node list.
-	state      *state              // Node information. Include Role, Term, Vote state.
+
+	state *state // Node information. Include Role, Term, Vote state.
 
 	leaderAddr *net.UDPAddr
 
@@ -27,10 +30,6 @@ type Election struct {
 	newTermCh      chan *newTermMsg
 	notifyLeaderCh chan *notifyLeaderMsg
 	stopCh         chan struct{}
-
-	// API channels
-	addMember chan *addMemberMsg
-	delMember chan *delMemberMsg
 }
 
 func New(cfg *Config) (*Election, error) {
@@ -69,8 +68,6 @@ func New(cfg *Config) (*Election, error) {
 		voteMeCh:       make(chan *voteMeMsg, 1),
 		notifyLeaderCh: make(chan *notifyLeaderMsg, 1),
 		newTermCh:      make(chan *newTermMsg, 1),
-		addMember:      make(chan *addMemberMsg, 1),
-		delMember:      make(chan *delMemberMsg, 1),
 		stopCh:         make(chan struct{}, 1),
 	}
 
@@ -159,12 +156,6 @@ func (e *Election) handle(msg Msg) {
 
 	case notifyLeaderType:
 		e.notifyLeaderCh <- msg.(*notifyLeaderMsg)
-
-	case addMemberType:
-		e.addMember <- msg.(*addMemberMsg)
-
-	case delMemberType:
-		e.delMember <- msg.(*delMemberMsg)
 	}
 }
 
@@ -235,18 +226,9 @@ func (e *Election) runLeader() {
 			e.leaderAddr = addr
 			e.state.setTerm(noti.Term)
 
-			sendMsg(e.conn, e.leaderAddr, &addMemberMsg{e.state.term(), e.conn.LocalAddr().String(), nil})
-
 			go e.runFollower()
 
 			return
-
-		// TODO (dbadoy): The cluster node list must be shared by all nodes.
-		case member := <-e.addMember:
-			e.memberlist[member.Member] = struct{}{}
-
-		case member := <-e.delMember:
-			delete(e.memberlist, member.Member)
 
 		case <-e.stopCh:
 			return
@@ -305,21 +287,6 @@ func (e *Election) runFollower() {
 			addr, _ := net.ResolveUDPAddr("udp", noti.Leader)
 			e.leaderAddr = addr
 			e.state.setTerm(noti.Term)
-
-			sendMsg(e.conn, e.leaderAddr, &addMemberMsg{e.state.term(), e.conn.LocalAddr().String(), nil})
-
-		// Relay to the leader after verifying the message.
-		case member := <-e.addMember:
-			if e.state.term() != member.Term {
-				continue
-			}
-			sendMsg(e.conn, e.leaderAddr, &addMemberMsg{e.state.term(), member.Member, nil})
-
-		case member := <-e.delMember:
-			if e.state.term() != member.Term {
-				continue
-			}
-			sendMsg(e.conn, e.leaderAddr, &delMemberMsg{e.state.term(), member.Member, nil})
 
 		case <-e.stopCh:
 			return
@@ -418,17 +385,9 @@ func (e *Election) runCandidate() {
 			e.leaderAddr = addr
 			e.state.setTerm(noti.Term)
 
-			sendMsg(e.conn, e.leaderAddr, &addMemberMsg{e.state.term(), e.conn.LocalAddr().String(), nil})
-
 			go e.runFollower()
 
 			return
-
-		case <-e.addMember:
-			continue
-
-		case <-e.delMember:
-			continue
 
 		case <-e.stopCh:
 			return
