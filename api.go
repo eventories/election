@@ -40,6 +40,10 @@ func (e *Election) Cluster() []string {
 // We can add logic to stop working when there is no consistency
 // for the cluster.
 func (e *Election) AddMember(member string) error {
+	if _, err := net.ResolveTCPAddr("tcp", member); err != nil {
+		return err
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if _, ok := e.memberlist[member]; ok {
@@ -50,6 +54,10 @@ func (e *Election) AddMember(member string) error {
 }
 
 func (e *Election) DelMember(member string) error {
+	if _, err := net.ResolveTCPAddr("tcp", member); err != nil {
+		return err
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if _, ok := e.memberlist[member]; !ok {
