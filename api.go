@@ -1,6 +1,9 @@
 package election
 
-import "errors"
+import (
+	"errors"
+	"net"
+)
 
 type Subscription struct {
 	C      <-chan Stat
@@ -13,6 +16,24 @@ func (e *Election) Term() uint64 {
 
 func (e *Election) Role() Role {
 	return e.state.role()
+}
+
+func (e *Election) Leader() *net.UDPAddr {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.leaderAddr
+}
+
+func (e *Election) Cluster() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	members := make([]string, 0, len(e.memberlist))
+	for m := range e.memberlist {
+		members = append(members, m)
+	}
+
+	return members
 }
 
 // Consistency for the cluster is the role of the upper layer.
