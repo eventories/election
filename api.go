@@ -3,10 +3,11 @@ package election
 import (
 	"errors"
 	"net"
+	"sync/atomic"
 )
 
 type Subscription struct {
-	C      <-chan Stat
+	C      chan Stat
 	Cancel func()
 }
 
@@ -70,5 +71,20 @@ func (e *Election) DelMember(member string) error {
 // - Stat event (notify changed Term or Role)
 // - Cluster event (added followers, addMember, delMember)
 func (e *Election) Subscribe() *Subscription {
-	panic("")
+	id := atomic.AddUint64(&e.sid, 1)
+
+	sub := &Subscription{
+		C: make(chan Stat, 1),
+		Cancel: func() {
+			e.mu.Lock()
+			delete(e.subs, id)
+			e.mu.Unlock()
+		},
+	}
+
+	e.mu.Lock()
+	e.subs[id] = sub
+	e.mu.Unlock()
+
+	return sub
 }

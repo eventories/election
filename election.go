@@ -22,6 +22,10 @@ type Election struct {
 
 	leaderAddr *net.UDPAddr
 
+	//
+	sid  uint64
+	subs map[uint64]*Subscription
+
 	// Common task channels
 	pingCh         chan *pingMsg
 	pongCh         chan *pongMsg
@@ -62,6 +66,7 @@ func New(cfg *Config) (*Election, error) {
 		memberlist:     memberlist,
 		state:          newState(),
 		leaderAddr:     nil,
+		subs:           make(map[uint64]*Subscription),
 		pingCh:         make(chan *pingMsg, 1),
 		pongCh:         make(chan *pongMsg, 1),
 		voteCh:         make(chan *voteMsg, 1),
@@ -164,6 +169,7 @@ func (e *Election) handle(msg Msg) {
 
 func (e *Election) runLeader() {
 	e.state.setRole(Leader)
+	e.feed(e.state.stat())
 
 	var (
 		// Check if a majority of their Followers have been pinged each interval
@@ -238,6 +244,7 @@ func (e *Election) runLeader() {
 
 func (e *Election) runFollower() {
 	e.state.setRole(Follower)
+	e.feed(e.state.stat())
 
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -297,6 +304,7 @@ func (e *Election) runFollower() {
 func (e *Election) runCandidate() {
 	e.state.setRole(Candidate)
 	e.state.setTerm(e.state.term() + 1)
+	e.feed(e.state.stat())
 
 	// Random time sleep
 	rand.Seed(time.Now().UnixNano())
@@ -420,4 +428,15 @@ func (e *Election) ping(to *net.UDPAddr, timeout time.Duration) error {
 	}
 
 	return nil
+}
+
+func (e *Election) feed(stat Stat) {
+	e.mu.Lock()
+	for _, sub := range e.subs {
+		select {
+		case sub.C <- stat:
+		default:
+		}
+	}
+	e.mu.Unlock()
 }
